@@ -4,6 +4,9 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
+# Set display format for pandas globally
+pd.options.display.float_format = "{:.2f}".format
+
 # Sample data generation (50 records) with both disputed and undisputed data
 def generate_sample_data():
     np.random.seed(42)
@@ -13,9 +16,9 @@ def generate_sample_data():
 
     for month in months:
         for carrier in carriers:
-            invoice_amount = np.random.uniform(1000, 5000)
+            invoice_amount = np.round(np.random.uniform(1000, 5000),2)
             is_disputed = np.random.rand() < 0.2
-            disputed_amount = np.random.uniform(0, invoice_amount * 0.3) if is_disputed else 0
+            disputed_amount = np.round(np.random.uniform(0, invoice_amount * 0.3) if is_disputed else 0,2)
             billing_cycle = f'{2024}-{int(month[-2:]):02d}-{np.random.choice([1, 2])}'  # Format: Year-Month-Fortnight
 
             data.append({
@@ -33,6 +36,7 @@ def generate_sample_data():
     return pd.DataFrame(data)
 
 df = generate_sample_data()
+df=df.round(2)
 
 # Set page layout to wide
 st.set_page_config(layout="wide")
@@ -46,6 +50,7 @@ month_filter = st.selectbox("Select Month (Optional)", options=["All"] + list(df
 
 # Applying filters (if selected) to data
 filtered_df = df.copy()
+filtered_df = filtered_df.round(2)
 if carrier_filter != "All":
     filtered_df = filtered_df[filtered_df['Carrier Name'] == carrier_filter]
 if month_filter != "All":
@@ -54,11 +59,10 @@ if month_filter != "All":
 # Function to create summary tables with specific fields and alignment
 def create_summary_table(data, columns):
     table = data[columns].copy()
-    # Format only the numeric fields to 2 decimal places
     for col in ['Invoice Amount (USD)', 'Disputed Amount (USD)', 'Usage (Mins)']:
         if col in table.columns:
-            table[col] = table[col].round(2)
-    return table.style.set_properties(**{'text-align': 'center'})
+            table[col] = table[col].map("{:.2f}".format)
+    return table
 
 # Tabs
 tab1, tab2, tab3, tab4 = st.tabs(["Invoice Recon", "Reconciliation Summary", "Dispute Summary", "Settlement Summary"])
@@ -82,9 +86,10 @@ with tab1:
 
     # Chart: Invoice Disputes by Month
     st.write("### Invoice Disputes by Month")
-    monthly_disputes = filtered_df.groupby('Invoice Month').agg({
+    monthly_disputes = filtered_df.round(2).groupby('Invoice Month').agg({
         'Invoice Amount (USD)': 'sum', 'Disputed Amount (USD)': 'sum'}).reset_index()
-    monthly_disputes_fig = px.line(monthly_disputes, x='Invoice Month', y=['Invoice Amount (USD)', 'Disputed Amount (USD)'],
+    monthly_disputes = np.round(monthly_disputes, 2)
+    monthly_disputes_fig = px.line(monthly_disputes.round(2), x='Invoice Month', y=['Invoice Amount (USD)', 'Disputed Amount (USD)'],
                                    title="Invoice Disputes by Month")
     st.plotly_chart(monthly_disputes_fig)
 
@@ -93,8 +98,8 @@ with tab2:
     st.subheader("Reconciliation Summary")
     st.write("### Summary Table")
 
-    filtered_df['Receivables'] = filtered_df['Invoice Amount (USD)'] - filtered_df['Disputed Amount (USD)']
-    filtered_df['Payables'] = filtered_df['Disputed Amount (USD)']  
+    filtered_df['Receivables'] = np.round(filtered_df['Invoice Amount (USD)'] - filtered_df['Disputed Amount (USD)'],2)
+    filtered_df['Payables'] = np.round(filtered_df['Disputed Amount (USD)'],2)  
 
     # Group by 'Carrier Name' and 'Billing Cycle'
     summary_table2 = filtered_df.groupby(['Carrier Name', 'Billing Cycle']).agg({
@@ -103,9 +108,9 @@ with tab2:
         }).reset_index()
 
     # Add some additional columns like Receivables, Payables, Netted Amount, and Settlement Status
-    summary_table2['Receivables'] = np.random.uniform(1000, 3000, len(summary_table2))
-    summary_table2['Payables'] = np.random.uniform(500, 2500, len(summary_table2))
-    summary_table2['Netted Amount'] = summary_table2['Receivables'] - summary_table2['Payables']
+    summary_table2['Receivables'] = np.round(np.random.uniform(1000, 3000, len(summary_table2)),2)
+    summary_table2['Payables'] = np.round(np.random.uniform(500, 2500, len(summary_table2)),2)
+    summary_table2['Netted Amount'] = np.round(summary_table2['Receivables'] - summary_table2['Payables'],2)
     summary_table2['Settlement Status'] = np.random.choice(['Settled', 'Pending'], len(summary_table2))
 
     st.dataframe(summary_table2, use_container_width=True)
@@ -126,13 +131,13 @@ with tab3:
     st.write("### Summary Table")
     
     # Generate disputed usage mins with random values between 0 and 5000
-    filtered_df['Disputed Usage (Mins)'] = np.random.uniform(0, 500, size=len(filtered_df))
+    filtered_df['Disputed Usage (Mins)'] = np.round(np.random.uniform(0, 500, size=len(filtered_df)),0)
 
     # Set 'Disputed Usage (Mins)' to 0 if Dispute Type is 'Rate Dispute'
     filtered_df.loc[filtered_df['Dispute Type'] == 'Rate Dispute', 'Disputed Usage (Mins)'] = 0
     
     # Group by 'Carrier Name' and aggregate the required fields
-    summary_table3 = filtered_df.groupby('Carrier Name').agg({
+    summary_table3 = filtered_df.round(2).groupby('Carrier Name').agg({
         'Invoice Amount (USD)': 'sum',
         'Dispute Type': 'first',  # Assuming Dispute Type is the same for each carrier
         'Disputed Amount (USD)': 'sum',
@@ -181,8 +186,8 @@ with tab4:
         'Disputed Amount (USD)': 'sum'
     }).rename(columns={'Invoice Amount (USD)': 'Total Invoices'}).reset_index()
     summary_table4['Settled Invoices'] = np.random.randint(1, 5, size=len(summary_table4))
-    summary_table4['Outstanding Amount'] = summary_table4['Disputed Amount (USD)'] * 0.8
-    summary_table4['Settled Amount'] = summary_table4['Disputed Amount (USD)'] - summary_table4['Outstanding Amount']
+    summary_table4['Outstanding Amount'] = np.round(summary_table4['Disputed Amount (USD)'] * 0.8,2)
+    summary_table4['Settled Amount'] = np.round(summary_table4['Disputed Amount (USD)'] - summary_table4['Outstanding Amount'],2)
     st.dataframe(summary_table4.style.set_properties(**{'text-align': 'center'}), use_container_width=True, height=250)
 
     # Chart: Settlement Status by Carrier
@@ -190,5 +195,6 @@ with tab4:
     settlement_status = filtered_df.groupby(['Carrier Name', 'Settlement Status']).size().reset_index(name='Count')
     settlement_pie = px.pie(settlement_status, names='Settlement Status', values='Count', title="Settlement Status by Carrier")
     st.plotly_chart(settlement_pie)
+
 
 
