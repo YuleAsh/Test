@@ -126,75 +126,98 @@ with tab2:
 
 
 # Tab 3: Dispute Summary
+# Tab 3: Dispute Summary
 with tab3:
     st.subheader("Dispute Summary")
     st.write("### Summary Table")
     
-    # Generate disputed usage mins with random values between 0 and 5000
-    filtered_df['Disputed Usage (Mins)'] = np.round(np.random.uniform(0, 500, size=len(filtered_df)),0)
-
-    # Set 'Disputed Usage (Mins)' to 0 if Dispute Type is 'Rate Dispute'
+    # Simulate practical values for 'Disputed Usage (Mins)'
+    filtered_df['Disputed Usage (Mins)'] = (np.random.uniform(0, 500, size=len(filtered_df)) * 0.7).round(2)
     filtered_df.loc[filtered_df['Dispute Type'] == 'Rate Dispute', 'Disputed Usage (Mins)'] = 0
-    
-    # Group by 'Carrier Name' and aggregate the required fields
-    summary_table3 = filtered_df.round(2).groupby('Carrier Name').agg({
-        'Invoice Amount (USD)': 'sum',
-        'Dispute Type': 'first',  # Assuming Dispute Type is the same for each carrier
-        'Disputed Amount (USD)': 'sum',
-        'Disputed Usage (Mins)': 'sum',
-        'Settlement Status': 'first'  # Assuming Settlement Status is the same for each carrier
+
+    # Group by 'Carrier Name' and calculate aggregated metrics
+    summary_table3 = filtered_df.groupby('Carrier Name').agg({
+        'Invoice Amount (USD)': 'sum',  # Sum of all invoices for each carrier
+        'Disputed Amount (USD)': 'sum',  # Sum of all disputed amounts
+        'Disputed Usage (Mins)': 'sum',  # Total disputed usage minutes
+        'Dispute Type': lambda x: ', '.join(x.dropna().unique()),  # Combine unique dispute types
+        'Settlement Status': lambda x: ', '.join(x.dropna().unique())  # Combine settlement statuses
     }).reset_index()
 
-    # Ensure the 'Disputed Usage (Mins)' is still within the range 0-5000
-    summary_table3['Disputed Usage (Mins)'] = summary_table3['Disputed Usage (Mins)'].clip(0, 5000)
+    # Round numerical values in the summary table
+    summary_table3[['Invoice Amount (USD)', 'Disputed Amount (USD)', 'Disputed Usage (Mins)']] = summary_table3[
+        ['Invoice Amount (USD)', 'Disputed Amount (USD)', 'Disputed Usage (Mins)']
+    ].round(2)
 
     # Rename columns for clarity
     summary_table3.rename(columns={
         'Invoice Amount (USD)': 'Total Invoice Amount (USD)',
         'Disputed Amount (USD)': 'Total Disputed Amount (USD)',
-        'Disputed Usage (Mins)': 'Total Disputed Usage (Mins)',
-        'Dispute Type': 'Dispute Type',
-        'Settlement Status': 'Settlement Status'
+        'Disputed Usage (Mins)': 'Total Disputed Usage (Mins)'
     }, inplace=True)
 
-    # Display the summary table with the specified fields
+    # Display the summary table
     st.dataframe(summary_table3.style.set_properties(**{'text-align': 'center'}), use_container_width=True, height=250)
 
     # Create two columns for side-by-side charts
     col1, col2 = st.columns(2)
 
-    # Chart 1: Total Disputed Amounts by Carrier
+    # Chart 1: Disputed Amounts by Carrier
     with col1:
-        st.write("### Disputed Amounts by Carrier")
         disputed_amounts = filtered_df.groupby('Carrier Name')['Disputed Amount (USD)'].sum().reset_index()
-        disputed_amounts_fig = px.bar(disputed_amounts, x='Carrier Name', y='Disputed Amount (USD)', title="Disputed Amounts by Carrier")
+        disputed_amounts['Disputed Amount (USD)'] = disputed_amounts['Disputed Amount (USD)'].round(2)
+        disputed_amounts_fig = px.bar(
+            disputed_amounts, x='Carrier Name', y='Disputed Amount (USD)', 
+            title="Disputed Amounts by Carrier"
+        )
         st.plotly_chart(disputed_amounts_fig, use_container_width=True)
 
-    # Chart 2: Total Disputed Usage by Carrier
+    # Chart 2: Disputed Usage by Carrier
     with col2:
-        st.write("### Disputed Usage (Mins) by Carrier")
         disputed_usage = filtered_df.groupby('Carrier Name')['Disputed Usage (Mins)'].sum().reset_index()
-        disputed_usage_fig = px.bar(disputed_usage, x='Carrier Name', y='Disputed Usage (Mins)', title="Disputed Usage (Mins) by Carrier")
+        disputed_usage['Disputed Usage (Mins)'] = disputed_usage['Disputed Usage (Mins)'].round(2)
+        disputed_usage_fig = px.bar(
+            disputed_usage, x='Carrier Name', y='Disputed Usage (Mins)', 
+            title="Disputed Usage (Mins) by Carrier"
+        )
         st.plotly_chart(disputed_usage_fig, use_container_width=True)
 
 # Tab 4: Settlement Summary
 with tab4:
     st.subheader("Settlement Summary")
     st.write("### Summary Table")
+
+    # Group by 'Carrier Name' and aggregate the required fields
     summary_table4 = filtered_df.groupby('Carrier Name').agg({
-        'Invoice Amount (USD)': 'size',
-        'Disputed Amount (USD)': 'sum'
-    }).rename(columns={'Invoice Amount (USD)': 'Total Invoices'}).reset_index()
-    summary_table4['Settled Invoices'] = np.random.randint(1, 5, size=len(summary_table4))
-    summary_table4['Outstanding Amount'] = np.round(summary_table4['Disputed Amount (USD)'] * 0.8,2)
-    summary_table4['Settled Amount'] = np.round(summary_table4['Disputed Amount (USD)'] - summary_table4['Outstanding Amount'],2)
-    st.dataframe(summary_table4.style.set_properties(**{'text-align': 'center'}), use_container_width=True, height=250)
+        'Disputed Amount (USD)': 'sum',  # Summing disputed amounts per carrier
+        'Settlement Status': 'count',  # Counting the invoices (total invoices per carrier)
+    }).reset_index()
+
+    # Rename 'Settlement Status' to 'Total Invoices' for clarity
+    summary_table4.rename(columns={'Settlement Status': 'Total Invoices'}, inplace=True)
+
+    # Define meaningful values based on telecom billing scenarios
+    summary_table4['Settled Invoices'] = summary_table4.apply(lambda row: row['Total Invoices'] - np.random.randint(1, 3), axis=1)  # Randomly settled invoices
+    summary_table4['Pending Settlements'] = summary_table4['Total Invoices'] - summary_table4['Settled Invoices']  # Pending invoices
+
+    # Total Settled Amount: Assuming 80% of the disputed amount is settled in most cases
+    summary_table4['Total Settled Amount'] = np.round(summary_table4['Disputed Amount (USD)'] * 0.8, 2)  # Settled amount (80% of disputed amount)
+
+    # Outstanding Amount: Remaining amount (could be 20% of disputed amounts)
+    summary_table4['Outstanding Amount'] = np.round(summary_table4['Disputed Amount (USD)'] * 0.2, 2)  # Outstanding amount (20% of disputed amount)
+
+    # Settlement Completion Rate: Ratio of settled invoices to total invoices
+    summary_table4['Settlement Completion Rate'] = np.round((summary_table4['Settled Invoices'] / summary_table4['Total Invoices']) * 100, 2)
+
+    # Settlement Adjustment: Simulating adjustments (could be based on dispute type, rates, etc.)
+    summary_table4['Settlement Adjustment'] = np.round(np.random.uniform(0, 500, len(summary_table4)), 2)  # Adjustments as random values
+
+    # Display the summary table with the practical fields
+    st.dataframe(summary_table4.style.set_properties(**{'text-align': 'center'}), use_container_width=True, height=300)
 
     # Chart: Settlement Status by Carrier
     st.write("### Settlement Status by Carrier")
     settlement_status = filtered_df.groupby(['Carrier Name', 'Settlement Status']).size().reset_index(name='Count')
     settlement_pie = px.pie(settlement_status, names='Settlement Status', values='Count', title="Settlement Status by Carrier")
     st.plotly_chart(settlement_pie)
-
-
 
