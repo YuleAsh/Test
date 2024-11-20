@@ -125,23 +125,28 @@ with tab2:
 
 
 
-# Tab 3: Dispute Summary
+
 # Tab 3: Dispute Summary
 with tab3:
     st.subheader("Dispute Summary")
     st.write("### Summary Table")
     
-    # Simulate practical values for 'Disputed Usage (Mins)'
-    filtered_df['Disputed Usage (Mins)'] = (np.random.uniform(0, 500, size=len(filtered_df)) * 0.7).round(2)
-    filtered_df.loc[filtered_df['Dispute Type'] == 'Rate Dispute', 'Disputed Usage (Mins)'] = 0
+    # Simulate realistic values for 'Disputed Usage (Mins)'
+    # Disputed Usage is based on the type of dispute (Rate or Volume)
+    filtered_df['Disputed Usage (Mins)'] = np.random.uniform(0, 500, size=len(filtered_df)).round(2)
+    filtered_df.loc[filtered_df['Dispute Type'] == 'Rate Dispute', 'Disputed Usage (Mins)'] = np.random.uniform(0, 5000, size=len(filtered_df[filtered_df['Dispute Type'] == 'Rate Dispute'])).round(2)
+    filtered_df.loc[filtered_df['Dispute Type'] == 'Volume Dispute', 'Disputed Usage (Mins)'] = np.random.uniform(100, 2000, size=len(filtered_df[filtered_df['Dispute Type'] == 'Volume Dispute'])).round(2)
+
+    # Simulate realistic 'Disputed Amount' linked to usage
+    filtered_df['Disputed Amount (USD)'] = (filtered_df['Disputed Usage (Mins)'] * np.random.uniform(0.05, 0.2, size=len(filtered_df))).round(2)
 
     # Group by 'Carrier Name' and calculate aggregated metrics
     summary_table3 = filtered_df.groupby('Carrier Name').agg({
         'Invoice Amount (USD)': 'sum',  # Sum of all invoices for each carrier
         'Disputed Amount (USD)': 'sum',  # Sum of all disputed amounts
         'Disputed Usage (Mins)': 'sum',  # Total disputed usage minutes
-        'Dispute Type': lambda x: ', '.join(x.dropna().unique()),  # Combine unique dispute types
-        'Settlement Status': lambda x: ', '.join(x.dropna().unique())  # Combine settlement statuses
+        'Dispute Type': lambda x: np.random.choice(x.dropna().unique()) if not x.dropna().empty else None,  # Combine unique dispute types
+        'Settlement Status': lambda x: np.random.choice(x.dropna().unique()) if not x.dropna().empty else None  # Combine settlement statuses
     }).reset_index()
 
     # Round numerical values in the summary table
@@ -157,7 +162,16 @@ with tab3:
     }, inplace=True)
 
     # Display the summary table
-    st.dataframe(summary_table3.style.set_properties(**{'text-align': 'center'}), use_container_width=True, height=250)
+    summary_table3_rounded = summary_table3.round(2)
+
+    # Convert the DataFrame to strings to ensure the display keeps formatting
+    summary_table3_display = summary_table3_rounded.astype(str)
+
+    # Display using Streamlit
+    st.dataframe(summary_table3_display.style.set_properties(**{'text-align': 'center'}), 
+             use_container_width=True, 
+             height=250)
+    
 
     # Create two columns for side-by-side charts
     col1, col2 = st.columns(2)
@@ -181,6 +195,7 @@ with tab3:
             title="Disputed Usage (Mins) by Carrier"
         )
         st.plotly_chart(disputed_usage_fig, use_container_width=True)
+
 
 # Tab 4: Settlement Summary
 with tab4:
@@ -213,11 +228,38 @@ with tab4:
     summary_table4['Settlement Adjustment'] = np.round(np.random.uniform(0, 500, len(summary_table4)), 2)  # Adjustments as random values
 
     # Display the summary table with the practical fields
-    st.dataframe(summary_table4.style.set_properties(**{'text-align': 'center'}), use_container_width=True, height=300)
+    summary_table4_rounded = summary_table4.round(2)
+    summary_table4_display = summary_table4_rounded.astype(str)
+    st.dataframe(summary_table4_display.style.set_properties(**{'text-align': 'center'}), use_container_width=True, height=300)
 
-    # Chart: Settlement Status by Carrier
-    st.write("### Settlement Status by Carrier")
-    settlement_status = filtered_df.groupby(['Carrier Name', 'Settlement Status']).size().reset_index(name='Count')
-    settlement_pie = px.pie(settlement_status, names='Settlement Status', values='Count', title="Settlement Status by Carrier")
-    st.plotly_chart(settlement_pie)
+    # Create columns for the two charts
+    st.write("### Settlement Visualizations")
+    col1, col2 = st.columns(2)
+
+    # Chart 1: Settlement Status by Carrier (Pie Chart)
+    with col1:
+        st.write("Settlement Status by Carrier")
+        settlement_status = filtered_df.groupby(['Carrier Name', 'Settlement Status']).size().reset_index(name='Count')
+        settlement_pie = px.pie(settlement_status, names='Settlement Status', values='Count', title="Settlement Status by Carrier")
+        st.plotly_chart(settlement_pie, use_container_width=True)
+
+    # Chart 2: Outstanding Amount by Carrier (Bar Chart)
+    with col2:
+        st.write("Outstanding Amount by Carrier")
+        outstanding_bar = px.bar(
+            summary_table4,
+            x='Carrier Name',
+            y='Outstanding Amount',
+            title="Outstanding Amount by Carrier",
+            text='Outstanding Amount',
+            labels={'Outstanding Amount': 'Amount (USD)'},
+            color='Outstanding Amount',
+            color_continuous_scale='Reds'
+        )
+        outstanding_bar.update_layout(
+            xaxis_title="Carrier Name",
+            yaxis_title="Outstanding Amount (USD)",
+            template="plotly_white"
+        )
+        st.plotly_chart(outstanding_bar, use_container_width=True)
 
